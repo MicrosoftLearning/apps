@@ -6,9 +6,9 @@ All of the apps are designed to run locally in-browser. No data is uploaded to M
 
 ## Apps
 
-- [AI Chat Playground](/chat-playground/)
-- [Information Extractor](/info-extractor/)
-- [Text Analyzer](/text-analyzer/)
-- [Python ScriptBook](/scriptbook/)
-- [ML Lite](/ml-lite/)
-- [ML Lab](/ml-lab/)
+- [AI Chat Playground](./chat-playground/)
+- [Information Extractor](./info-extractor/)
+- [Text Analyzer](./text-analyzer/)
+- [Python ScriptBook](./scriptbook/)
+- [ML Lite](./ml-lite/)
+- [ML Lab](./ml-lab/)
