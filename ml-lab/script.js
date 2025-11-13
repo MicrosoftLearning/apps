@@ -184,6 +184,17 @@ function setupAccessibilityFeatures() {
 // Initialize accessibility features when page loads
 document.addEventListener('DOMContentLoaded', function() {
     setupAccessibilityFeatures();
+    
+    // Add event delegation for algorithm-link buttons
+    document.addEventListener('click', function(e) {
+        if (e.target.matches('.algorithm-link') || e.target.closest('.algorithm-link')) {
+            const button = e.target.matches('.algorithm-link') ? e.target : e.target.closest('.algorithm-link');
+            const algorithm = button.getAttribute('data-algorithm');
+            if (algorithm && typeof currentJobDetails !== 'undefined') {
+                navigateToChildJob(algorithm, currentJobDetails);
+            }
+        }
+    });
 });
 
 // Column selection functions
@@ -1987,7 +1998,7 @@ function displayUploadedFile(fileName) {
                     </div>
                 ` : `
                     <div style="font-size: 12px; color: #d73a49; margin-bottom: 8px;">
-                        ${currentData.error ? `Parse Error: ${currentData.error}` : 'File uploaded - configure headers below'}
+                        ${currentData.error ? `Parse Error: ${escapeHtml(currentData.error)}` : 'File uploaded - configure headers below'}
                     </div>
                 `}
                 
@@ -1998,7 +2009,7 @@ function displayUploadedFile(fileName) {
                         ${columns.length > 0 ? columns.map((col, index) => `
                             <input type="text" 
                                    id="custom-header-${index}" 
-                                   value="${hasValidData ? col : `Column${index + 1}`}" 
+                                   value="${hasValidData ? escapeHtml(col) : `Column${index + 1}`}" 
                                    placeholder="Column ${index + 1}"
                                    style="flex: 1; min-width: 80px; padding: 4px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px;"
                                    onchange="updateCustomHeaders()"
@@ -2043,7 +2054,7 @@ function displayUploadedFile(fileName) {
                                 </tr>
                                 <!-- Header row -->
                                 <tr id="header-row">
-                                    ${columns.map(col => `<th style="padding: 6px 8px; border: 1px solid #ddd; background: #f1f3f4; text-align: left; white-space: nowrap; font-weight: 600;">${col}</th>`).join('')}
+                                    ${columns.map(col => `<th style="padding: 6px 8px; border: 1px solid #ddd; background: #f1f3f4; text-align: left; white-space: nowrap; font-weight: 600;">${escapeHtml(col)}</th>`).join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -2060,7 +2071,7 @@ function displayUploadedFile(fileName) {
                                             if (value.length > 30) {
                                                 value = value.substring(0, 27) + '...';
                                             }
-                                            return `<td style="padding: 6px 8px; border: 1px solid #ddd; white-space: nowrap; max-width: 200px;">${value}</td>`;
+                                            return `<td style="padding: 6px 8px; border: 1px solid #ddd; white-space: nowrap; max-width: 200px;">${escapeHtml(value)}</td>`;
                                         }).join('')}
                                     </tr>
                                 `).join('')}
@@ -4195,7 +4206,7 @@ function updateBestModelSection(job) {
                         <span class="best-model-badge">Best Model</span>
                     </div>
                     <div class="best-model-algorithm">Algorithm name: 
-                        <button class="algorithm-link" onclick="navigateToChildJob('${escapeHtml(bestModel.name).replace(/'/g, "\\'")}', currentJobDetails)" title="View child job details">
+                        <button class="algorithm-link" data-algorithm="${escapeHtml(bestModel.name)}" title="View child job details">
                             ${escapeHtml(bestModel.name)}
                         </button>
                     </div>
@@ -4392,7 +4403,7 @@ function updateModelsTabContent() {
             
             row.innerHTML = `
                 <td class="algorithm-cell">
-                    <button class="algorithm-link" onclick="navigateToChildJob('${escapeHtml(model.name).replace(/'/g, "\\'")}', currentJobDetails)" title="View child job details">
+                    <button class="algorithm-link" data-algorithm="${escapeHtml(model.name)}" title="View child job details">
                         ${escapeHtml(model.display_name || model.name)}
                     </button>
                     ${model.is_best ? '<span class="best-model-badge">Best Model</span>' : ''}
@@ -5197,7 +5208,7 @@ function updateChildJobsTabContent() {
             <td>
                 <div class="child-job-name">
                     <span class="job-icon">🤖</span>
-                    <button class="algorithm-link" onclick="navigateToChildJob('${escapeHtml(childJob.algorithm).replace(/'/g, "\\'")}', currentJobDetails)" title="View child job details">
+                    <button class="algorithm-link" data-algorithm="${escapeHtml(childJob.algorithm)}" title="View child job details">
                         ${escapeHtml(childJob.displayName)}
                     </button>
                 </div>
