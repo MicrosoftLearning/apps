@@ -194,6 +194,42 @@ document.addEventListener('DOMContentLoaded', function() {
                 navigateToChildJob(algorithm, currentJobDetails);
             }
         }
+        
+        // Handle remove file button
+        if (e.target.matches('.remove-file-btn') || e.target.closest('.remove-file-btn')) {
+            removeUploadedFile();
+        }
+        
+        // Handle retry parsing button
+        if (e.target.matches('.retry-parsing-btn') || e.target.closest('.retry-parsing-btn')) {
+            retryParsing();
+        }
+        
+        // Handle save dataset button
+        if (e.target.matches('#save-data-btn')) {
+            saveDataset();
+        }
+    });
+    
+    // Add event delegation for change events
+    document.addEventListener('change', function(e) {
+        // Handle custom header inputs
+        if (e.target.matches('.custom-header-input')) {
+            updateCustomHeaders();
+        }
+        
+        // Handle first-row-headers checkbox
+        if (e.target.matches('#first-row-headers')) {
+            toggleHeaderMode();
+        }
+        
+        // Handle column checkboxes
+        if (e.target.matches('.column-checkbox')) {
+            const column = e.target.getAttribute('data-column');
+            if (column) {
+                toggleColumnSelection(column);
+            }
+        }
     });
 });
 
@@ -1978,7 +2014,7 @@ function displayUploadedFile(fileName) {
     let fileDisplay = `
         <div class="uploaded-file">
             <span>📄 ${escapeHtml(fileName)}</span>
-            <button type="button" onclick="removeUploadedFile()" style="margin-left: 10px; color: #d13438;">✕</button>
+            <button type="button" class="remove-file-btn" style="margin-left: 10px; color: #d13438;">✕</button>
         </div>
     `;
     
@@ -2009,15 +2045,15 @@ function displayUploadedFile(fileName) {
                         ${columns.length > 0 ? columns.map((col, index) => `
                             <input type="text" 
                                    id="custom-header-${index}" 
+                                   class="custom-header-input"
                                    value="${hasValidData ? escapeHtml(col) : `Column${index + 1}`}" 
                                    placeholder="Column ${index + 1}"
                                    style="flex: 1; min-width: 80px; padding: 4px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px;"
-                                   onchange="updateCustomHeaders()"
                                    ${currentData.isSaved ? 'disabled' : ''}>
                         `).join('') : `
                             <div style="color: #666; font-size: 11px;">
                                 Please ensure the file is a valid CSV format to detect columns.
-                                <br><button onclick="retryParsing()" style="margin-top: 5px; padding: 4px 8px; font-size: 11px;">Retry Parsing</button>
+                                <br><button class="retry-parsing-btn" style="margin-top: 5px; padding: 4px 8px; font-size: 11px;">Retry Parsing</button>
                             </div>
                         `}
                     </div>
@@ -2027,7 +2063,7 @@ function displayUploadedFile(fileName) {
                     <!-- Header checkbox - positioned above table, aligned left -->
                     <div style="margin-bottom: 10px;">
                         <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;">
-                            <input type="checkbox" id="first-row-headers" ${useFirstRowAsHeaders ? 'checked' : ''} onchange="toggleHeaderMode()" style="margin: 0;" ${currentData.isSaved ? 'disabled' : ''}>
+                            <input type="checkbox" id="first-row-headers" ${useFirstRowAsHeaders ? 'checked' : ''} style="margin: 0;" ${currentData.isSaved ? 'disabled' : ''}>
                             <span>First row contains column headers</span>
                         </label>
                     </div>
@@ -2041,10 +2077,9 @@ function displayUploadedFile(fileName) {
                                         <th style="padding: 4px 8px; border: 1px solid #ddd; background: #e8f4fd; text-align: center;">
                                             <label style="display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; font-size: 10px; font-weight: normal;">
                                                 <input type="checkbox" 
-                                                       id="col-${col}" 
+                                                       id="col-${escapeHtml(col)}" 
                                                        class="column-checkbox" 
-                                                       data-column="${col}" 
-                                                       onchange="toggleColumnSelection('${col}')" 
+                                                       data-column="${escapeHtml(col)}" 
                                                        checked 
                                                        style="margin: 0; scale: 0.8;">
                                                 <span style="white-space: nowrap;">Include</span>
@@ -2081,7 +2116,7 @@ function displayUploadedFile(fileName) {
                     
                     <!-- Create button positioned under right edge of table -->
                     <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-                        <button type="button" id="save-data-btn" onclick="saveDataset()" 
+                        <button type="button" id="save-data-btn" 
                                 style="padding: 8px 16px; font-size: 12px; background: #0366d6; color: white; border: none; border-radius: 4px; cursor: pointer; ${currentData.isSaved ? 'background: #28a745;' : ''}" 
                                 ${currentData.isSaved ? 'disabled' : ''}>
                             ${currentData.isSaved ? '✓ Created' : 'Create'}
@@ -2091,7 +2126,7 @@ function displayUploadedFile(fileName) {
                     <!-- Header checkbox - positioned above placeholder, aligned left -->
                     <div style="margin-bottom: 10px;">
                         <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;">
-                            <input type="checkbox" id="first-row-headers" ${useFirstRowAsHeaders ? 'checked' : ''} onchange="toggleHeaderMode()" style="margin: 0;">
+                            <input type="checkbox" id="first-row-headers" ${useFirstRowAsHeaders ? 'checked' : ''} style="margin: 0;">
                             <span>First row contains column headers</span>
                         </label>
                     </div>
