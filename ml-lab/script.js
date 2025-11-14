@@ -2625,6 +2625,16 @@ function populateConfigModal(taskType) {
         ? ['logistic_regression', 'decision_tree', 'random_forest']
         : ['linear_regression', 'decision_tree', 'lasso']);
     
+    // Check if multiclass classification
+    let isMulticlass = false;
+    const targetColumn = currentJobData.targetColumn || document.getElementById('target-column')?.value;
+    
+    if (taskType === 'classification' && targetColumn && typeof window.get_column_unique_count === 'function') {
+        const uniqueCount = window.get_column_unique_count(targetColumn);
+        isMulticlass = uniqueCount > 2;
+        console.log(`Target column '${targetColumn}' has ${uniqueCount} unique values. Multiclass: ${isMulticlass}`);
+    }
+    
     if (taskType === 'classification') {
         // Classification metrics
         ['auc', 'accuracy', 'precision', 'recall', 'f1'].forEach(metric => {
@@ -2639,10 +2649,25 @@ function populateConfigModal(taskType) {
         ['logistic_regression', 'decision_tree', 'random_forest'].forEach(algo => {
             const label = document.createElement('label');
             const isChecked = savedAlgorithms.includes(algo);
-            label.innerHTML = `
-                <input type="checkbox" value="${algo}" ${isChecked ? 'checked' : ''}>
-                ${algo.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-            `;
+            const isDisabled = isMulticlass && algo === 'logistic_regression';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = algo;
+            checkbox.checked = isChecked && !isDisabled;
+            checkbox.disabled = isDisabled;
+            
+            const text = document.createTextNode(' ' + algo.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()));
+            
+            label.appendChild(checkbox);
+            label.appendChild(text);
+            
+            if (isDisabled) {
+                label.style.opacity = '0.5';
+                label.style.cursor = 'not-allowed';
+                label.title = 'Logistic Regression is not supported for multiclass classification (>2 classes)';
+            }
+            
             algorithmsDiv.appendChild(label);
         });
     } else {
@@ -3947,6 +3972,12 @@ function handleTrainingComplete(resultsJson) {
                 if (results.job_info) {
                     job.job_info = results.job_info;
                     job.training_logs = results.job_info.training_logs;
+                    // Store class information for confusion matrix visualization
+                    if (results.job_info.task_type === 'classification') {
+                        job.n_classes = results.job_info.n_classes;
+                        job.class_labels = results.job_info.class_labels;
+                        console.log('Stored class info:', job.n_classes, 'classes with labels:', job.class_labels);
+                    }
                     console.log('Stored training logs:', job.training_logs?.length || 0, 'entries');
                 }
                 
@@ -4868,29 +4899,47 @@ function generateConfusionMatrix(ctx, canvas) {
     // Clear the canvas completely first
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    // Get class information from the parent job
+    const nClasses = currentJobDetails?.n_classes || 2;
+    const classLabels = currentJobDetails?.class_labels || ['Class 0', 'Class 1'];
+    
+    console.log('Generating confusion matrix for', nClasses, 'classes:', classLabels);
+    
     // Generate sample confusion matrix data based on the model's accuracy
     const accuracy = currentChildJobDetails?.metrics?.accuracy || 0.85;
     const sampleSize = 100;
     
-    // Create a realistic confusion matrix
-    const truePositives = Math.round(accuracy * sampleSize * 0.6);
-    const trueNegatives = Math.round(accuracy * sampleSize * 0.4);
-    const falsePositives = Math.round((1 - accuracy) * sampleSize * 0.4);
-    const falseNegatives = Math.round((1 - accuracy) * sampleSize * 0.6);
+    // Create a realistic confusion matrix for n classes
+    const confusionMatrix = [];
+    const samplesPerClass = Math.floor(sampleSize / nClasses);
     
-    const confusionMatrix = [
-        [trueNegatives, falsePositives],
-        [falseNegatives, truePositives]
-    ];
+    for (let i = 0; i < nClasses; i++) {
+        confusionMatrix[i] = [];
+        for (let j = 0; j < nClasses; j++) {
+            if (i === j) {
+                // Diagonal elements (correct predictions)
+                confusionMatrix[i][j] = Math.round(accuracy * samplesPerClass);
+            } else {
+                // Off-diagonal elements (misclassifications)
+                const errorRate = (1 - accuracy) / (nClasses - 1);
+                confusionMatrix[i][j] = Math.round(errorRate * samplesPerClass);
+            }
+        }
+    }
     
-    const labels = ['Predicted Negative', 'Predicted Positive'];
-    const actualLabels = ['Actual Negative', 'Actual Positive'];
+    // Prepare labels for display (truncate if too long)
+    const displayLabels = classLabels.map(label => {
+        const str = String(label);
+        return str.length > 10 ? str.substring(0, 8) + '...' : str;
+    });
     
-    // Draw confusion matrix
-    const cellWidth = 120;
-    const cellHeight = 60;
-    const startX = 80;
-    const startY = 60;
+    // Calculate cell dimensions based on number of classes
+    const minCellSize = 50;
+    const maxCellSize = 120;
+    const cellSize = Math.max(minCellSize, Math.min(maxCellSize, Math.floor(300 / nClasses)));
+    
+    const startX = 100;
+    const startY = 80;
     
     // Set font
     ctx.font = '14px Arial';
@@ -4899,7 +4948,7 @@ function generateConfusionMatrix(ctx, canvas) {
     // Draw title
     ctx.fillStyle = '#0078d4';
     ctx.font = '16px Arial';
-    ctx.fillText('Confusion Matrix', canvas.width / 2, 25);
+    ctx.fillText('Confusion Matrix' + (nClasses > 2 ? ` (${nClasses} classes)` : ''), canvas.width / 2, 25);
     
     // Draw labels
     ctx.font = '12px Arial';
@@ -4912,10 +4961,10 @@ function generateConfusionMatrix(ctx, canvas) {
     const maxValue = Math.max(...allValues);
     
     // Draw matrix
-    for (let i = 0; i < 2; i++) {
-        for (let j = 0; j < 2; j++) {
-            const x = startX + j * cellWidth;
-            const y = startY + i * cellHeight;
+    for (let i = 0; i < nClasses; i++) {
+        for (let j = 0; j < nClasses; j++) {
+            const x = startX + j * cellSize;
+            const y = startY + i * cellSize;
             const value = confusionMatrix[i][j];
             
             // Calculate color intensity based on value (0 = white, 1 = full Microsoft blue)
@@ -4929,42 +4978,38 @@ function generateConfusionMatrix(ctx, canvas) {
             ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
             
             // Draw cell
-            ctx.fillRect(x, y, cellWidth, cellHeight);
+            ctx.fillRect(x, y, cellSize, cellSize);
             
             // Draw border
             ctx.strokeStyle = '#0078d4';
             ctx.lineWidth = 1;
-            ctx.strokeRect(x, y, cellWidth, cellHeight);
+            ctx.strokeRect(x, y, cellSize, cellSize);
             
             // Draw value - use white text on dark backgrounds, dark text on light backgrounds
             ctx.fillStyle = intensity > 0.6 ? '#ffffff' : '#0078d4';
-            ctx.font = '18px Arial';
-            ctx.fillText(value, x + cellWidth/2, y + cellHeight/2 + 6);
+            ctx.font = Math.max(12, Math.min(18, cellSize / 4)) + 'px Arial';
+            ctx.fillText(value, x + cellSize/2, y + cellSize/2 + 6);
         }
     }
     
     // Draw axis labels
-    ctx.font = '12px Arial';
+    ctx.font = Math.max(10, Math.min(12, cellSize / 5)) + 'px Arial';
     ctx.fillStyle = '#0078d4';
     
     // Column labels (predicted)
-    ctx.fillText('Negative', startX + cellWidth/2, startY - 10);
-    ctx.fillText('Positive', startX + cellWidth + cellWidth/2, startY - 10);
+    for (let j = 0; j < nClasses; j++) {
+        ctx.fillText(displayLabels[j], startX + j * cellSize + cellSize/2, startY - 10);
+    }
     
     // Row labels (actual) - rotated
-    ctx.save();
-    ctx.translate(startX - 30, startY + cellHeight/2);
-    ctx.rotate(-Math.PI/2);
-    ctx.fillStyle = '#0078d4';
-    ctx.fillText('Negative', 0, 0);
-    ctx.restore();
-    
-    ctx.save();
-    ctx.translate(startX - 30, startY + cellHeight + cellHeight/2);
-    ctx.rotate(-Math.PI/2);
-    ctx.fillStyle = '#0078d4';
-    ctx.fillText('Positive', 0, 0);
-    ctx.restore();
+    for (let i = 0; i < nClasses; i++) {
+        ctx.save();
+        ctx.translate(startX - 30, startY + i * cellSize + cellSize/2);
+        ctx.rotate(-Math.PI/2);
+        ctx.fillStyle = '#0078d4';
+        ctx.fillText(displayLabels[i], 0, 0);
+        ctx.restore();
+    }
     
     // Add "Actual" label
     ctx.save();

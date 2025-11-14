@@ -1641,6 +1641,23 @@ if hasattr(model, 'predict_proba'):
         
         js.window.filter_dataframe_columns = filter_dataframe_columns
         
+        # Function to get unique values count for a column
+        def get_column_unique_count(column_name):
+            """Get the number of unique values in a column"""
+            if 'current_dataframe' in globals():
+                df = globals()['current_dataframe']
+                if column_name in df.columns:
+                    unique_count = len(df[column_name].dropna().unique())
+                    print(f"Column '{column_name}' has {unique_count} unique values")
+                    return unique_count
+                else:
+                    print(f"Column '{column_name}' not found in DataFrame")
+                    return 0
+            print("No DataFrame available")
+            return 0
+        
+        js.window.get_column_unique_count = get_column_unique_count
+        
         # Training function for ML models - Full implementation with all metrics
         def train_ml_models_pyscript(job_data_json, data_info):
             from datetime import datetime
@@ -1749,6 +1766,15 @@ if hasattr(model, 'predict_proba'):
                 log_message(f"  • Target values: {len(y)} samples")
                 log_message(f"  • Target column: '{target_column}'")
                 
+                # For classification, detect number of unique classes
+                n_classes = None
+                class_labels = None
+                if task_type == 'classification':
+                    class_labels = sorted(y.unique())
+                    n_classes = len(class_labels)
+                    log_message(f"  • Classification type: {'Binary' if n_classes == 2 else 'Multiclass'} ({n_classes} classes)")
+                    log_message(f"  • Class labels: {class_labels}")
+                
                 # Store original column names for user-friendly input
                 original_columns = list(X.columns)
                 log_message(f"  • Original feature columns: {original_columns}")
@@ -1842,11 +1868,29 @@ if hasattr(model, 'predict_proba'):
                 # Define base models (pipelines will be created for each)
                 log_message(f"🤖 Initializing {task_type} models with pipelines...")
                 if task_type == 'classification':
-                    base_models = {
-                        'logistic_regression': LogisticRegression(random_state=random_state, max_iter=1000),
-                        'decision_tree': DecisionTreeClassifier(random_state=random_state),
-                        'random_forest': RandomForestClassifier(random_state=random_state, n_estimators=10)
-                    }
+                    # Configure algorithms for binary or multiclass classification
+                    if n_classes > 2:
+                        # Multiclass classification - only use tree-based algorithms
+                        log_message(f"  • Configuring algorithms for multiclass classification ({n_classes} classes)")
+                        log_message(f"  • Note: Logistic regression not supported for multiclass, using tree-based algorithms only")
+                        base_models = {
+                            'decision_tree': DecisionTreeClassifier(random_state=random_state),
+                            'random_forest': RandomForestClassifier(random_state=random_state, n_estimators=10)
+                        }
+                        # Filter out logistic_regression from requested algorithms if present
+                        if 'logistic_regression' in algorithms:
+                            log_message(f"  • Removing logistic_regression from algorithm list (not supported for multiclass)")
+                            algorithms = [algo for algo in algorithms if algo != 'logistic_regression']
+                            if not algorithms:
+                                raise ValueError("No valid algorithms selected for multiclass classification. Please select Decision Tree or Random Forest.")
+                    else:
+                        # Binary classification
+                        log_message(f"  • Configuring algorithms for binary classification")
+                        base_models = {
+                            'logistic_regression': LogisticRegression(random_state=random_state, max_iter=1000),
+                            'decision_tree': DecisionTreeClassifier(random_state=random_state),
+                            'random_forest': RandomForestClassifier(random_state=random_state, n_estimators=10)
+                        }
                 else:
                     base_models = {
                         'linear_regression': LinearRegression(),
@@ -2167,7 +2211,10 @@ if hasattr(model, 'predict_proba'):
                         'early_stop_triggered': early_stop_triggered,
                         'timed_out': timed_out,
                         'experiment_timeout': experiment_timeout,
-                        'metric_threshold': metric_threshold
+                        'metric_threshold': metric_threshold,
+                        'n_classes': n_classes if task_type == 'classification' else None,
+                        'class_labels': [str(label) for label in class_labels] if class_labels is not None else None,
+                        'task_type': task_type
                     }
                 }
                 
